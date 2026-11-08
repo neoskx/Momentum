@@ -1,0 +1,48 @@
+name: Deploy public report
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check for a published report
+        id: report
+        run: |
+          if [ -f index.html ]; then
+            echo 'ready=true' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Stage public static files only
+        if: steps.report.outputs.ready == 'true'
+        run: |
+          mkdir "$RUNNER_TEMP/site"
+          tar --exclude=.git --exclude=.github -cf - . | tar -xf - -C "$RUNNER_TEMP/site"
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.report.outputs.ready == 'true'
+        with:
+          path: ${{ runner.temp }}/site
+      - name: Deploy report
+        id: deployment
+        if: steps.report.outputs.ready == 'true'
+        uses: actions/deploy-pages@v4
